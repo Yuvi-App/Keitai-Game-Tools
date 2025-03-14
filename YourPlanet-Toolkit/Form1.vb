@@ -52,22 +52,54 @@ Public Class Form1
                     'Extract Data
                     Dim filePath As String = Path.Combine(ExportDir, $"{i}.bin")
                     Dim bytes As Byte() = br.ReadBytes(FileLength)
-                    File.WriteAllBytes(Path.Combine(ExportDir, $"{i}.bin"), bytes)
+                    File.WriteAllBytes(filePath, bytes)
 
-                    ' Check if the file is a ZIP (starts with "PK")
-                    If bytes.Length >= 2 AndAlso bytes(0) = &H50 AndAlso bytes(1) = &H4B Then
+
+                    If i = 17 Then '17 is another packed archive file
                         Dim extractDir As String = Path.Combine(ExportDir, "Extracted")
-
-                        ' Ensure Extracted directory exists
-                        If Not Directory.Exists(extractDir) Then
-                            Directory.CreateDirectory(extractDir)
-                        End If
-
-                        ' Define the extraction path using the original file name
                         Dim zipExtractPath As String = Path.Combine(extractDir, $"Extracted_{i}")
+                        Directory.CreateDirectory(zipExtractPath)
+                        Using br2 As BinaryReader = New BinaryReader(File.Open(filePath, FileMode.Open))
+                            Dim StartPOS17 As UInt32 = &H0
+                            Dim StartData17 As UInt32 = &H54
+                            For n As Integer = 1 To 15
+                                br2.BaseStream.Position = StartPOS17
+                                Dim FileLength17 As UInt32 = ReadUInt32BigEndian(br2)
+                                StartPOS17 = br2.BaseStream.Position
+                                br2.BaseStream.Position = StartData17
+                                'Extract Data
+                                Dim filePath17 As String = Path.Combine(zipExtractPath, $"{n}.bin")
+                                Dim bytes17 As Byte() = br2.ReadBytes(FileLength17)
+                                File.WriteAllBytes(filePath17, bytes17)
+                                ' Check if the file is a ZIP (starts with "PK")
+                                If bytes17.Length >= 2 AndAlso bytes17(0) = &H50 AndAlso bytes17(1) = &H4B Then
+                                    ' Define the extraction path using the original file name
+                                    Dim zipExtractPath17 As String = Path.Combine(zipExtractPath, $"Extracted_{n}")
 
-                        ' Extract ZIP contents
-                        ExtractZip(filePath, zipExtractPath)
+                                    ' Extract ZIP contents
+                                    ExtractZip(filePath17, zipExtractPath17)
+                                End If
+
+                                StartData17 = br2.BaseStream.Position
+                                br2.BaseStream.Position = StartPOS17
+                            Next
+                        End Using
+                    Else
+                        ' Check if the file is a ZIP (starts with "PK")
+                        If bytes.Length >= 2 AndAlso bytes(0) = &H50 AndAlso bytes(1) = &H4B Then
+                            Dim extractDir As String = Path.Combine(ExportDir, "Extracted")
+
+                            ' Ensure Extracted directory exists
+                            If Not Directory.Exists(extractDir) Then
+                                Directory.CreateDirectory(extractDir)
+                            End If
+
+                            ' Define the extraction path using the original file name
+                            Dim zipExtractPath As String = Path.Combine(extractDir, $"Extracted_{i}")
+
+                            ' Extract ZIP contents
+                            ExtractZip(filePath, zipExtractPath)
+                        End If
                     End If
 
                     'Set new Data Start
