@@ -28,6 +28,9 @@ Partial Class Form1
         Label1 = New Label()
         btnExtractARCBatch = New Button()
         FolderBrowserDialog1 = New FolderBrowserDialog()
+        Label2 = New Label()
+        btnRepackARCSingle = New Button()
+        btnExtractText = New Button()
         SuspendLayout()
         ' 
         ' bntExtractSP
@@ -72,11 +75,43 @@ Partial Class Form1
         btnExtractARCBatch.Text = "Batch"
         btnExtractARCBatch.UseVisualStyleBackColor = True
         ' 
+        ' Label2
+        ' 
+        Label2.FlatStyle = FlatStyle.Flat
+        Label2.Font = New Font("Segoe UI", 9F, FontStyle.Underline)
+        Label2.Location = New Point(12, 274)
+        Label2.Name = "Label2"
+        Label2.Size = New Size(347, 25)
+        Label2.TabIndex = 4
+        Label2.Text = "Repack ARC"
+        Label2.TextAlign = ContentAlignment.MiddleCenter
+        ' 
+        ' btnRepackARCSingle
+        ' 
+        btnRepackARCSingle.Location = New Point(12, 302)
+        btnRepackARCSingle.Name = "btnRepackARCSingle"
+        btnRepackARCSingle.Size = New Size(165, 29)
+        btnRepackARCSingle.TabIndex = 5
+        btnRepackARCSingle.Text = "Single"
+        btnRepackARCSingle.UseVisualStyleBackColor = True
+        ' 
+        ' btnExtractText
+        ' 
+        btnExtractText.Location = New Point(12, 160)
+        btnExtractText.Name = "btnExtractText"
+        btnExtractText.Size = New Size(347, 29)
+        btnExtractText.TabIndex = 6
+        btnExtractText.Text = "Extract Text"
+        btnExtractText.UseVisualStyleBackColor = True
+        ' 
         ' Form1
         ' 
         AutoScaleDimensions = New SizeF(8F, 20F)
         AutoScaleMode = AutoScaleMode.Font
         ClientSize = New Size(371, 450)
+        Controls.Add(btnExtractText)
+        Controls.Add(btnRepackARCSingle)
+        Controls.Add(Label2)
         Controls.Add(btnExtractARCBatch)
         Controls.Add(Label1)
         Controls.Add(btnExtractARCSingle)
@@ -92,5 +127,8 @@ Partial Class Form1
     Friend WithEvents Label1 As Label
     Friend WithEvents btnExtractARCBatch As Button
     Friend WithEvents FolderBrowserDialog1 As FolderBrowserDialog
+    Friend WithEvents Label2 As Label
+    Friend WithEvents btnRepackARCSingle As Button
+    Friend WithEvents btnExtractText As Button
 
 End Class
