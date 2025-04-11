@@ -13,10 +13,7 @@ Public Class Form1
         If OpenFileDialog1.ShowDialog = DialogResult.OK Then
             SelectedSP = OpenFileDialog1.FileName
         Else
-            If Not SelectedSP.ToLower().EndsWith(".sp") Then
-                MessageBox.Show($"Input file is not a SP.. Ensure it ends in .sp")
-                Exit Sub
-            End If
+            Exit Sub
         End If
 
         'Create Output DIR
@@ -172,7 +169,6 @@ Public Class Form1
         Using bw As BinaryWriter = New BinaryWriter(File.Open(Outputfile, FileMode.Create))
             Dim ByteCount As Integer = 0
             For Each f In File.ReadAllLines(InputTranslatedTextFile)
-                f = f.Trim
                 If Not String.IsNullOrEmpty(f) Then
                     Dim StringToWrite As Byte()
                     If f.ToLower = "{empty}" Then
