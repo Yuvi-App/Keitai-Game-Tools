@@ -1,0 +1,16 @@
+Xenosaga Pied Piper Notes
+001B = New Scene TextBox (new Image)
+541B = Continue Scene TextBox (same image)
+5403 = Black Scene with text in Middle frame (no image)(no textbox)
+	- Either A800 or A900
+	- 1st Line in TextBox
+	- 07B600 Unsure but common
+	- 2nd Line in TextBox
+	- 07C300 Unsure but common
+	- 3rd Line in TextBox
+	- 07D000 Unsure but common
+	- 4th Line in TextBox
+	- 07DD00
+	- 5th Line in TextBox
+
+001D = New image?

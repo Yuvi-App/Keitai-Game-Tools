@@ -22,7 +22,6 @@ Public Class Form1
         Directory.CreateDirectory(Path.Join(ExportDir, "ExtractedFiles"))
         ExtractAllZips(ExportDir)
     End Sub
-
     Sub ExtractZipFilesFromBinary(ByVal binaryFilePath As String, ByVal outputFolder As String)
         If Not Directory.Exists(outputFolder) Then
             Directory.CreateDirectory(outputFolder)
@@ -118,7 +117,6 @@ Public Class Form1
             Next
         End Using
     End Sub
-
     Function ExtractARCFiles(inputArc)
         Using br As BinaryReader = New BinaryReader(File.Open(inputArc, FileMode.Open))
             Dim Checkheader = Encoding.ASCII.GetString(br.ReadBytes(3))
@@ -232,8 +230,6 @@ Public Class Form1
             RepackARC(FolderBrowserDialog1.SelectedPath)
         End If
     End Sub
-
-
     Function RepackARC(InputFolder)
         Dim NewARCFolder = $"Created/ARC/"
         Dim NewARCFile = $"{NewARCFolder}{Path.GetFileNameWithoutExtension(InputFolder)}.dat"
@@ -296,16 +292,21 @@ Public Class Form1
             Dim u2 = br.ReadUInt16
         End Using
     End Function
+
     Private Sub btnExtractText_Click(sender As Object, e As EventArgs) Handles btnExtractText.Click
         If OpenFileDialog1.ShowDialog = DialogResult.OK Then
+            Dim selectedFile As String = OpenFileDialog1.FileName
+            Dim folderPath As String = Path.GetDirectoryName(selectedFile)
+
             Using Br As BinaryReader = New BinaryReader(File.Open(OpenFileDialog1.FileName, FileMode.Open))
                 Dim lastpos
                 Dim LinePOSList As New List(Of Integer)
                 Dim StringTextBoxList As New List(Of String)
+                Dim PointerPOSList As New List(Of Integer)
 
                 'We First need to get the First TextStringLocation to Mark end of PointerTable
                 Dim EndofPT As Integer
-                Br.ReadBytes(2)
+                Dim U1 = Br.ReadBytes(2)
                 Dim PointerOffset = ReadUInt16BigEndian(Br)
                 While True
                     Dim checkbyte = Br.ReadByte
@@ -320,79 +321,168 @@ Public Class Form1
 
                 'Now Loop again to get all pointers
                 Br.BaseStream.Position = 0
-                While Br.BaseStream.Position <= EndofPT
-                    Dim LoopCount As Integer = 0
-                    Dim checkbyte = Br.ReadByte
-                    If checkbyte = 0 Then
-                        Dim nextcheckbyte = Br.ReadByte
-                        If nextcheckbyte = &H1B Then
-                            'Found Start of New Character Text Scene
-                            Br.ReadBytes(2)
-                            LinePOSList.Add(Br.ReadUInt16)
-                            While FoundNextScene(Br) = False
-                                ' Break if Br.BaseStream.Position exceeds EndofPT
-                                If Br.BaseStream.Position >= EndofPT Then Exit While
-                                If Br.BaseStream.Position + 3 <= EndofPT Then
-                                    Br.ReadBytes(3)
-                                    LinePOSList.Add(Br.ReadUInt16)
-                                Else
-                                    Exit While
-                                End If
-                            End While
-                            LinePOSList.Add(0)
-                        Else
-                            Br.BaseStream.Position -= 1
-                        End If
+                While Br.BaseStream.Position <= EndofPT - 2
+                    Dim pos As Long = Br.BaseStream.Position
+                    Dim b1 As Byte = Br.ReadByte()
 
-                    ElseIf checkbyte = &H54 Then
-                        Dim nextcheckbyte = Br.ReadByte
-                        If nextcheckbyte = &H1B Then
-                            'Found Start of New Character Text Scene
-                            Br.ReadBytes(2)
-                            LinePOSList.Add(Br.ReadUInt16)
-                            While FoundNextScene(Br) = False
-                                ' Break if Br.BaseStream.Position exceeds EndofPT
-                                If Br.BaseStream.Position >= EndofPT Then Exit While
-                                If Br.BaseStream.Position + 3 <= EndofPT Then
-                                    Br.ReadBytes(3)
-                                    LinePOSList.Add(Br.ReadUInt16)
-                                Else
-                                    Exit While
-                                End If
-                            End While
-                            LinePOSList.Add(0)
-                        Else
-                            Br.BaseStream.Position -= 1
-                        End If
+                    ' Peek ahead without advancing permanently
+                    If Br.BaseStream.Position > EndofPT Then Exit While ' avoid overflow
+                    Dim b2 As Byte = Br.ReadByte()
+
+                    ' Combine to word (little-endian: b1 is low byte, b2 is high byte)
+                    Dim word As UShort = CUShort(b1) Or (CUShort(b2) << 8)
+
+                    ' Check for scene start marker
+                    If word = &H1B00 OrElse word = &H1B54 Then
+                        ' Rewind to the start of the pattern
+                        Br.BaseStream.Position = pos
+
+                        ' Start Getting Pointers (start of scene pointers)
+                        Dim TypeofScene = Br.ReadBytes(2)
+                        Dim Scene_u1 = Br.ReadBytes(2)
+                        PointerPOSList.Add(Br.BaseStream.Position)
+                        LinePOSList.Add(Br.ReadUInt16) 'TextBox Line 1
+
+                        ' Lopp inside the Pointers to get text pointers
+                        While True
+                            Dim validPatterns As List(Of Byte()) = New List(Of Byte()) From {
+                                New Byte() {&H1B, &HB5, &H0},
+                                New Byte() {&H7, &HB6, &H0},
+                                New Byte() {&H7, &HC3, &H0},
+                                New Byte() {&H7, &HD0, &H0},
+                                New Byte() {&H7, &HDD, &H0}
+                            }
+
+                            Dim posBefore = Br.BaseStream.Position
+                            Dim next3Bytes() As Byte = Br.ReadBytes(3)
+                            If next3Bytes.Length < 3 Then Exit While
+
+                            Dim matchFound As Boolean = validPatterns.Any(Function(p) p.SequenceEqual(next3Bytes))
+
+                            If matchFound Then
+                                ' Add to PointerPOS List
+                                PointerPOSList.Add(Br.BaseStream.Position)
+                                ' Matched a valid 3-byte pointer indicator
+                                LinePOSList.Add(Br.ReadUInt16()) ' Read the pointer that follows
+                            Else
+                                ' Rewind if no match
+                                Br.BaseStream.Position = posBefore
+                                Exit While
+                            End If
+                        End While
+                        PointerPOSList.Add(0) ' This is so i know the end of scene textbox
+                        LinePOSList.Add(0) ' This is so i know the end of scene textbox
+                    Else
+                        ' Rewind back one byte so we move forward by only 1 byte
+                        Br.BaseStream.Position = pos + 1
                     End If
                 End While
 
-
-                'Get Text
+                ' Go get the text at the pointers
                 For Each L In LinePOSList
-                    If L = 0 Then
+                    If L = 0 OrElse L >= Br.BaseStream.Length Then
                         StringTextBoxList.Add("\n")
                     Else
                         Br.BaseStream.Position = L
-                        Dim CharCount As Integer = 0
-                        While True
-                            Dim ReadByte = Br.ReadByte
-                            If ReadByte = 0 Then
-                                Exit While
-                            Else
-                                CharCount += 1
-                            End If
+                        Dim bytes As New List(Of Byte)
+
+                        While Br.BaseStream.Position < Br.BaseStream.Length
+                            Dim b As Byte = Br.ReadByte()
+                            If b = 0 Then Exit While ' null terminator
+                            bytes.Add(b)
                         End While
-                        Br.BaseStream.Position = L
-                        StringTextBoxList.Add(Encoding.GetEncoding(932).GetString(Br.ReadBytes(CharCount)))
+
+                        If bytes.Count = 0 Then
+                            StringTextBoxList.Add("\n")
+                        Else
+                            StringTextBoxList.Add(Encoding.GetEncoding(932).GetString(bytes.ToArray()))
+                        End If
                     End If
                 Next
 
                 Dim ExportFile = ""
+
+                'Export to PO
+                Directory.CreateDirectory("Script_Export")
+                Dim folderName As String = New DirectoryInfo(Path.GetDirectoryName(selectedFile)).Name
+                Dim fileNameWithoutExt As String = Path.GetFileNameWithoutExtension(selectedFile)
+                Dim poFile As String = folderName & "_" & fileNameWithoutExt & ".po"
+                If File.Exists($"Script_Export/{poFile}") Then File.Delete($"Script_Export/{poFile}")
+                Dim FormattedString As String = ""
+                Dim OutputFormattedStrings As New List(Of String)
+                For Each ST In StringTextBoxList
+                    If ST = "\n" Then
+                        OutputFormattedStrings.Add(FormattedString)
+                        FormattedString = ""
+                    Else
+                        FormattedString += ST & "\n"
+                    End If
+                Next
+                Dim OutPutPointerString = ""
+                Dim Count = 0
+                For Each Point In PointerPOSList
+                    If Point = 0 Then
+                        WriteToPOFile(poFile, OutputFormattedStrings(Count), OutPutPointerString)
+                        OutPutPointerString = ""
+                        Count += 1
+                    Else
+                        OutPutPointerString += Point.ToString & ","
+                    End If
+                Next
             End Using
         End If
     End Sub
 
+    Public Function WriteToPOFile(pofile, stringtowrite, PointerPOSs)
+        Using sw As StreamWriter = New StreamWriter(File.Open($"Script_Export/{pofile}", FileMode.Append))
+            sw.WriteLine($"# POS:{PointerPOSs}")
+            sw.WriteLine($"msgid ""{stringtowrite}""")
+            sw.WriteLine("msgstr """"")
+            sw.WriteLine("")
+        End Using
+    End Function
+    Public Function ReadUntilPattern(br As BinaryReader) As Byte()
+        ' Define the patterns to search for
+        Dim patterns As Byte()() = {
+        New Byte() {&H0, &H1D},
+        New Byte() {&H0, &H1B},
+        New Byte() {&H0, &H1C},
+        New Byte() {&H54, &H1B},
+        New Byte() {&H54, &H3},
+        New Byte() {&H54, &H35}
+    }
+
+        ' Store read bytes
+        Dim buffer As New List(Of Byte)
+        Dim foundPattern As Boolean = False
+
+        While br.BaseStream.Position < br.BaseStream.Length
+            ' Read the next byte
+            Dim b As Byte = br.ReadByte()
+            buffer.Add(b)
+
+            ' Check if the last two bytes form one of the patterns
+            If buffer.Count >= 2 Then
+                Dim lastTwo As Byte() = {buffer(buffer.Count - 2), buffer(buffer.Count - 1)}
+                For Each pattern In patterns
+                    If lastTwo.SequenceEqual(pattern) Then
+                        ' Remove the pattern from the buffer
+                        buffer.RemoveAt(buffer.Count - 1)
+                        buffer.RemoveAt(buffer.Count - 1)
+                        foundPattern = True
+                        br.BaseStream.Position -= 2
+                        Exit For
+                    End If
+                Next
+            End If
+
+            ' If a pattern was found, break the loop
+            If foundPattern Then Exit While
+        End While
+
+        ' Return the collected bytes as an array
+        Return buffer.ToArray()
+    End Function
     Function FoundNextScene(br As BinaryReader) As Boolean
         ' Store the initial position
         Dim initialPosition As Long = br.BaseStream.Position
